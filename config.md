@@ -22,19 +22,15 @@
 
 8. `click_to_teleport`: 显示文本中的坐标信息是否可以点击传送, 需要玩家具有op权限, 一般生存服务器可放心使用(默认值为`true`)
 
-9. `where_protected_list`: 保护名单, 该名单中的玩家仅可被具有大于上文规定的`admin`权限的玩家查询(默认值为空列表`[]`)
+9. `location_protect`: 玩家位置保护相关设定:
 
-10. `protected_text`: 试图查询被保护玩家位置时权限不足的返回信息, 默认为`"他在你心里!"`
+    'enable_whitelist'和`enable_blacklist`分别启用查询白名单和黑名单, 权限等级不满足本配置文件中权限要求`admin`级别要求的玩家查询他人坐标时, 白名单启用后仅有`whitelist`中的玩家可被查询, 黑名单启用后`blacklist`中的玩家不可被查询, `protected_text`为不具备`admin`权限的玩家查询受保护的玩家坐标时返回的信息。
+    
+    默认值: `enable_whitelist`: False, `enable_blacklist`: True, `whitelist`和`blacklist`均为`[]`(即空列表), `protected_text`: "§c他在你心里!§r"(即红色的"他在你心里!")
 
 ## 高级配置
 
 这部分配置一般仅适用于调试排障
-
-### 位于代码中的可编辑部分: 
-
-1. `VERBOSE`: 调试模式, 默认为`False`, 向控制台输出调试日志
-
-2. `DEBUG_LOG_FILE`: 调试日志路径, 默认为`logs/here.log`, 插件输出的调试日志会输出到这里(正常加载处理配置文件时的日志不包含在内, 该部分会被输出到MCDR本身的日志中)
 
 ### 位于配置文件中的隐藏选项:
 

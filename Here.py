@@ -9,7 +9,7 @@ from mcdreforged.api.all import *
 
 PLUGIN_METADATA = {
 	'id': 'here',
-	'version': '2.0.0-alpha2',
+	'version': '2.0.0-beta1',
 	'name': 'Here',
 	'author': [
 		'Fallen_Breath',
@@ -21,15 +21,11 @@ PLUGIN_METADATA = {
 
 # Editable content / 可编辑内容
 CONFIG_FILE = 'config/here.json' # Configuration file path / 配置文件路径
-VERBOSE = False # Set it to true to show debug logs / 设为true以显示调试日志
-DEBUG_LOG_PATH = 'logs/here.log' # Log marked as DEBUG will be saved to here if VERBOSE is true / 被标记为DEBUG的调试日志在VERBOSE为true时会被保存到这里
 # End editable content / 可编辑内容结束
 
-# Here is ONLY default data of the config file
-# 此处 仅为 配置默认数据
-# DO NOT edit data here!!! If you need to change the config value, pls edit in config file
+# DO NOT edit default data here!!! Please edit config in config file
 # 不要在这里改数据！！！要改配置去配置文件里改
-# Access the link in plugin metadata to get config manual(current Chinese only)
+# Access the link in plugin metadata to get config manual (current Chinese only)
 # 请访问插件元数据中的链接以获取插件帮助手册(目前仅中文)
 default_config = {
 	'command_prefix':
@@ -57,8 +53,14 @@ default_config = {
 	'query_timeout': 3,
 	'where_default_broadcast': False,
 	'click_to_teleport': True,
-	'where_protected_list': [],
-	'protected_text': '§c他在你心里!§r'
+	'location_protect': 
+		{
+			'enable_whitelist': False,
+			'enable_blacklist': True,
+			'whitelist': [],
+			'blacklist': [],
+			'protected_text': '§c他在你心里!§r'
+			}
 #  ,'disable_rcon': None, # Hided Debug Option
 }
 
@@ -153,16 +155,7 @@ def show_help(server: ServerInterface, info: Info):
 	server.reply(info, help_msg_rtext)
 
 
-def debug_log(msg: str):
-	if VERBOSE:
-		msg = msg.replace('§r', '').replace('§d', '').replace('§c', '').replace('§6', '').replace('§e', '').replace('§a', '')
-		with open(os.path.join(DEBUG_LOG_PATH), 'a+') as log:
-			log.write(datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]") + msg + '\n')
-		print("[MCDR] " + datetime.datetime.now().strftime("[%H:%M:%S]") + ' [{}/\033[1;36mDEBUG\033[0m] '.format(PLUGIN_METADATA['id']) + msg)
-
-
 def process_coordinate(text: str) -> tuple:
-	debug_log(text)
 	data = text[1:-1].replace('d', '').split(', ')
 	data = [(x + 'E0').split('E') for x in data]
 	return tuple([float(e[0]) * 10 ** int(e[1]) for e in data])
@@ -241,7 +234,7 @@ def display(server: ServerInterface, name: str, position: str, dimension: str, m
 			coordinate_text(x, y, z, dimension, opposite=True)
 			)
 	if info is None:
-		server.broadcast(texts)
+		server.say(texts)
 	else:
 		server.reply(info, texts)
 
@@ -259,7 +252,6 @@ def run_rcon(server: ServerInterface, info: Info, name: str, mode: str, to_all =
 	if rcon_result is None:
 		player_not_found(server, info)
 		return
-	debug_log(rcon_result.group())
 	position = process_coordinate(rcon_result.group())
 	dimension = process_dimension(server.rcon_query('data get entity {} Dimension'.format(name)))
 	info1 = None if to_all else info
@@ -273,16 +265,20 @@ def wait_for_data(server: ServerInterface, info: Info, player_info: list, timeou
 	if player_info in here_user:
 		here_user.remove(player_info)
 		player_not_found(server, info)
-		debug_log('Player {} not found'.format(player_info[0]))
 
+
+def is_protected(name: str):
+	c = config['location_protect']
+	protected = False if not c['enable_whitelist'] else not name in c['whitelist']
+	return True if name in c['blacklist'] and c['enable_blacklist'] else protected
 
 def query_data(server: ServerInterface, info: Info, name = None, to_all = True):
 	mode = 'where'
 	if name is None:
 		name = info.player
 		mode = 'here'
-	if mode == 'where' and name in config['where_protected_list'] and info.get_command_source().get_permission_level() < config['permission_requirement']['admin']:
-		server.reply(info, config['protected_text'])
+	if mode == 'where' and is_protected(name) and info.get_command_source().get_permission_level() < config['permission_requirement']['admin']:
+		server.reply(info, config['location_protect']['protected_text'])
 		return
 	if hasattr(server, 'MCDR') and server.is_rcon_running() and not config['disable_rcon']:
 		run_rcon(server, info, name, mode, to_all)
@@ -352,7 +348,6 @@ def on_info(server: ServerInterface, info: Info):
 				if '-a' in args:
 					to_all = True
 					args.remove('-a')
-				debug_log(str(args))
 				# !!where <player> [<arg>]
 				if len(args) == 2:
 					query_data(server, info, args[1], to_all)
@@ -375,7 +370,6 @@ def on_info(server: ServerInterface, info: Info):
 			position = process_coordinate(position_str)
 			info1 = None if len(player_found) <= 2 else player_found[2]
 			display(server, name, position, dimension, player_found[1], info1)
-			debug_log(str(here_user))
 			here_user.remove(player_found)
 
 
