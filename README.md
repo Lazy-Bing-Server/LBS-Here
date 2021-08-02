@@ -16,6 +16,6 @@ Here
 配置文件默认值适用于一般生存服务器，如需修改请查阅[此处](./config.md)
 （此处一般生存服务器指所有玩家均没有传送等OP功能权限的生存模式服务器)
 
-![example](https://raw.githubusercontent.com/TISUnion/Here/MCDR/img.png)
+![example](./img.png)
 
 
