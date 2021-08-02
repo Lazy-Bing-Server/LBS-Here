@@ -9,7 +9,7 @@ from mcdreforged.api.all import *
 
 PLUGIN_METADATA = {
 	'id': 'here',
-	'version': '2.0.0-alpha1',
+	'version': '2.0.0-alpha2',
 	'name': 'Here',
 	'author': [
 		'Fallen_Breath',
@@ -57,7 +57,8 @@ default_config = {
 	'query_timeout': 3,
 	'where_default_broadcast': False,
 	'click_to_teleport': True,
-	'where_protected_list': []
+	'where_protected_list': [],
+	'protected_text': '§c他在你心里!§r'
 #  ,'disable_rcon': None, # Hided Debug Option
 }
 
@@ -79,6 +80,7 @@ help_message = '''
 §7-----§r MCDR {2} v{3} §7-----§r
 快速广播自己的坐标或查询别人的坐标
 §d【格式说明】§r
+若输入下列指令没反应就是被管理员禁用了
 §7{0}§r {4}
 §7{0} help§r 显示此帮助信息
 §7{0} reload§r 重载本插件
@@ -254,23 +256,24 @@ def player_not_found(server: ServerInterface, info: Info):
 
 def run_rcon(server: ServerInterface, info: Info, name: str, mode: str, to_all = True):
 	rcon_result = re.search(r'\[.*\]', server.rcon_query('data get entity {} Pos'.format(name)))
-	debug_log(rcon_result.group())
 	if rcon_result is None:
 		player_not_found(server, info)
+		return
+	debug_log(rcon_result.group())
 	position = process_coordinate(rcon_result.group())
 	dimension = process_dimension(server.rcon_query('data get entity {} Dimension'.format(name)))
 	info1 = None if to_all else info
 	display(server, name, position, dimension, mode, info1)
 
 
-@new_thread('Where - Wait for respond')
+@new_thread('Here - Wait for respond')
 def wait_for_data(server: ServerInterface, info: Info, player_info: list, timeout: float = None):
 	actual_timeout = config['query_timeout'] if timeout is None else timeout
 	time.sleep(actual_timeout)
-	debug_log('Player {} not fount'.format(player_info[0]))
-	player_not_found(server, info)
-	if len(here_user) > 1:
+	if player_info in here_user:
 		here_user.remove(player_info)
+		player_not_found(server, info)
+		debug_log('Player {} not found'.format(player_info[0]))
 
 
 def query_data(server: ServerInterface, info: Info, name = None, to_all = True):
@@ -279,7 +282,7 @@ def query_data(server: ServerInterface, info: Info, name = None, to_all = True):
 		name = info.player
 		mode = 'here'
 	if mode == 'where' and name in config['where_protected_list'] and info.get_command_source().get_permission_level() < config['permission_requirement']['admin']:
-		server.reply(info, RText('该玩家受到保护, 不可被查询到', color=RColor.red))
+		server.reply(info, config['protected_text'])
 		return
 	if hasattr(server, 'MCDR') and server.is_rcon_running() and not config['disable_rcon']:
 		run_rcon(server, info, name, mode, to_all)
@@ -310,6 +313,7 @@ def on_info(server: ServerInterface, info: Info):
 		info.cancel_send_to_server()
 		args = info.content.strip().split(' ')
 		clen = len(args)
+		# !!here
 		if args[0] == config['command_prefix']['here']:
 			# !!here (from player)
 			if clen == 1 and info.is_player:
@@ -335,24 +339,25 @@ def on_info(server: ServerInterface, info: Info):
 					perm_requirement_not_met(config['permission_requirement']['where'])
 			else:
 				command_error()
-		# !!where <player> [<arg>]
-		elif args[0] == config['command_prefix']['where'] and clen in [2, 3]:
-			# parse arguments
-			to_all = config['where_default_broadcast']
-			if '-s' in args:
-				to_all = False
-				args.remove('-s')
-			if '-a' in args:
-				to_all = True
-				args.remove('-a')
-			debug_log(str(args))
-			if info.get_command_source().get_permission_level() >= config['permission_requirement']['where']:
+		# !!where
+		elif args[0] == config['command_prefix']['where'] and clen <= 3:
+			if info.get_command_source().get_permission_level() < config['permission_requirement']['where']:
+				perm_requirement_not_met(config['command_prefix']['where'])
+			else:
+				# parse arguments
+				to_all = config['where_default_broadcast']
+				if '-s' in args:
+					to_all = False
+					args.remove('-s')
+				if '-a' in args:
+					to_all = True
+					args.remove('-a')
+				debug_log(str(args))
+				# !!where <player> [<arg>]
 				if len(args) == 2:
 					query_data(server, info, args[1], to_all)
 				else: 
 					command_error()
-			else:
-				perm_requirement_not_met(config['command_prefix']['where'])
 		else: 
 			command_error()
 
@@ -370,19 +375,21 @@ def on_info(server: ServerInterface, info: Info):
 			position = process_coordinate(position_str)
 			info1 = None if len(player_found) <= 2 else player_found[2]
 			display(server, name, position, dimension, player_found[1], info1)
+			debug_log(str(here_user))
 			here_user.remove(player_found)
 
 
 def on_load(server: ServerInterface, old):
 	global here_user, here_help, where_help
 	config.load(server) # load config
-	if old is not None:
-		here_user = old.here_user # inherit data from old module
+	if hasattr(old, 'here_user'):
+		if isinstance(old.here_user, list):
+			here_user = old.here_user # inherit data from old module
 	# build and register help message
 	here_help = '广播自己的坐标并高亮玩家' if config['highlight_time']['here'] > 0 else '广播自己的坐标'
 	is_where_highlight = '并高亮玩家' if config['highlight_time']['where'] > 0 else ''
 	is_where_broadcast = '、广播' if config['where_default_broadcast'] else ''
-	where_help = f'查询{is_where_broadcast}别人的坐标{is_where_highlight}'
+	where_help = '查询{}别人的坐标{}'.format(is_where_broadcast, is_where_highlight)
 	if config['permission_requirement']['here'] <= 4:
 		server.register_help_message(config['command_prefix']['here'], here_help)
 	if config['permission_requirement']['where'] <= 4:
